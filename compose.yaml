@@ -1,0 +1,56 @@
+services:
+  dev-env:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: dev-environment
+    restart: always
+
+    # DinD に必須
+    privileged: true
+
+    # ネットワークとポート
+    networks:
+      - dev-network
+    ports:
+      - "2222:22"   # SSH
+      - "2375:2375" # Docker daemon (TLSなし・ローカル開発用)
+
+    # ボリュームマウント
+    volumes:
+      - ./workspace:/home/dev/workspace
+      - dev-home:/home/dev
+      - sshd-keys:/etc/ssh        # SSHホストキーの永続化
+      - docker-data:/home/dev/.local/share/docker  # rootless Docker データ
+
+    # 環境変数
+    environment:
+      SHELL: /bin/zsh
+      XDG_RUNTIME_DIR: /run/user/1000
+      # ホストの Docker デーモンではなくコンテナ内の Docker を使う
+      DOCKER_HOST: unix:///var/run/docker.sock
+
+    # カーネルパラメータ（DinD 安定動作用）
+    sysctls:
+      net.ipv4.ip_forward: 1
+
+    # SSHの接続を監視（公開鍵認証のため -i でキー指定）
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/22"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+
+volumes:
+  dev-home:
+    driver: local
+  sshd-keys:
+    driver: local
+  docker-data:
+    driver: local
+
+networks:
+  dev-network:
+    driver: bridge
