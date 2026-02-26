@@ -5,7 +5,7 @@ set -e
 if [ -S /var/run/docker.sock ]; then
     SOCK_GID=$(stat -c '%g' /var/run/docker.sock)
     # dev ユーザーが docker.sock にアクセスできるようにする
-    if ! id -nG dev | grep -qw "$(getent group "$SOCK_GID" | cut -d: -f1 2>/dev/null)"; then
+    if ! id -G dev | grep -qw "$SOCK_GID"; then
         groupadd -g "$SOCK_GID" -o docker-host 2>/dev/null || true
         usermod -aG docker-host dev 2>/dev/null || true
     fi

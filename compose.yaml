@@ -6,8 +6,8 @@ services:
     container_name: dev-environment
     restart: always
 
-    # ホストの Docker グループGID を付与（docker.sock アクセス用）
-    # ホスト側で `getent group docker | cut -d: -f3` で確認して設定
+    # Docker ソケットアクセス用（entrypoint.sh で動的に GID を解決するためフォールバック）
+    # rootful Docker: `getent group docker | cut -d: -f3` で確認して設定
     group_add:
       - ${DOCKER_GID:-999}
 
@@ -17,8 +17,8 @@ services:
       - "2222:22"   # SSH
 
     volumes:
-      # DooD: ホストの Docker ソケットを共有
-      - /var/run/docker.sock:/var/run/docker.sock
+      # DooD: ホストの Docker ソケットを共有（.env で DOCKER_SOCK を設定）
+      - ${DOCKER_SOCK:-/var/run/docker.sock}:/var/run/docker.sock
       # ワークスペース
       - ./workspace:/home/dev/workspace
       # ホームディレクトリ永続化

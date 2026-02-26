@@ -1,0 +1,26 @@
+aws() {
+    if [[ "$1" != "login" ]]; then
+        command aws "$@"
+        return
+    fi
+
+    local tmp
+    tmp=$(mktemp) || return 1
+    grep -v '^credential_process' "$HOME/.aws/config" > "$tmp"
+    AWS_CONFIG_FILE="$tmp" command aws "$@"
+    local exit_code=$?
+    rm -f "$tmp"
+    return $exit_code
+}
+function peco-select-history() {
+  BUFFER=$(\history -n -r 1 | peco --query "$LBUFFER")
+  CURSOR=$#BUFFER
+  zle clear-screen
+}
+zle -N peco-select-history
+bindkey '^r' peco-select-history
+bindkey "^H" backward-kill-word
+
+alias claude="claude --dangerously-skip-permissions"
+alias t="tmux"
+export PATH="$HOME/.local/bin:$PATH"

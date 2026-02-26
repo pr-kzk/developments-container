@@ -58,10 +58,20 @@ RUN wget -qO- https://apt.releases.hashicorp.com/gpg | \
 # 4. Cloud CLI ツール
 # ------------------------------------------------------------------ #
 RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash && \
-    curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
+    curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh && \
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
+    unzip awscliv2.zip && \
+    ./aws/install && \
+    rm -rf awscliv2.zip aws/
 
 # ------------------------------------------------------------------ #
-# 5. SSH ディレクトリの準備
+# 5. peco
+# ------------------------------------------------------------------ #
+RUN curl -fsSL https://github.com/peco/peco/releases/download/v0.6.0/peco_0.6.0_linux_amd64.tar.gz | \
+    tar xzf - -C /usr/local/bin peco
+
+# ------------------------------------------------------------------ #
+# 6. SSH ディレクトリの準備
 # ------------------------------------------------------------------ #
 RUN mkdir -p /run/sshd && \
     curl -fsSL https://astral.sh/uv/install.sh -o /tmp/uv-install.sh
@@ -106,8 +116,21 @@ RUN sh /tmp/uv-install.sh
 # oh-my-zsh
 RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
 
-# .zshrc に BASH_ENV をソース
-RUN echo '. "/home/dev/.bash_env"' >> ~/.zshrc
+# Claude Code
+RUN curl -fsSL https://claude.ai/install.sh | bash
+
+# OpenAI Codex
+RUN bash -c 'source "${BASH_ENV}" && npm i -g @openai/codex'
+
+# tmux 設定
+COPY --chown=dev:dev .tmux.conf /home/dev/.tmux.conf
+
+# カスタム zshrc
+COPY --chown=dev:dev .zshrc.custom /home/dev/.zshrc.custom
+
+# .zshrc に BASH_ENV とカスタム設定をソース
+RUN echo '. "/home/dev/.bash_env"' >> ~/.zshrc && \
+    echo '. "/home/dev/.zshrc.custom"' >> ~/.zshrc
 
 # ------------------------------------------------------------------ #
 # 8. エントリポイント
