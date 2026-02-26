@@ -21,6 +21,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     jq \
     unzip \
     tmux \
+    nano \
+    zip \
     lsb-release \
     && rm -rf /var/lib/apt/lists/*
 
@@ -77,7 +79,7 @@ RUN usermod -l dev -d /home/dev -m ubuntu && \
 # ホストの docker グループGID に合わせる（compose.yaml の group_add で対応）
 
 # SSH 公開鍵
-COPY dev-container.pub /home/dev/.ssh/authorized_keys
+COPY developments-container.pub /home/dev/.ssh/authorized_keys
 RUN chown -R dev:dev /home/dev/.ssh && \
     chmod 700 /home/dev/.ssh && \
     chmod 600 /home/dev/.ssh/authorized_keys
