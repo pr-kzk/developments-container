@@ -6,9 +6,6 @@ services:
     container_name: dev-environment
     restart: always
 
-    # DooD: privileged 不要
-    # privileged: true  ← 削除済み
-
     # ホストの Docker グループGID を付与（docker.sock アクセス用）
     # ホスト側で `getent group docker | cut -d: -f3` で確認して設定
     group_add:
