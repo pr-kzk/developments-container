@@ -1,2 +1,4 @@
 workspace/
 developments-container*
+secrets/
+.env.local

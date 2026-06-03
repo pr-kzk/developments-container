@@ -1,0 +1,35 @@
+// VS Code / Cursor の Dev Containers 拡張から開くための設定。
+// 既存の compose.yaml を再利用するため、SSH 2222 経由の運用と並存できる。
+//
+// 罠回避のための重要設定:
+//   - remoteUser: dev          ... root で入るとホームのオーナーが壊れる
+//   - updateRemoteUserUID: false ... rootless Docker で UID マップを書き換えると壊れる
+//   - overrideCommand: false   ... デフォルトの sleep infinity で sshd を奪われないため
+//   - features は使わない       ... compose で書いた volume と衝突する事故が多い
+//
+// 前提: ホスト側で DOCKER_HOST=unix:///run/user/1000/docker.sock が
+// .bashrc か systemd user env に入っていること。
+{
+    "name": "dev-env",
+    "dockerComposeFile": [
+        "../compose.yaml"
+    ],
+    "service": "dev-env",
+    "workspaceFolder": "/home/dev/workspace",
+    "remoteUser": "dev",
+    "updateRemoteUserUID": false,
+    "overrideCommand": false,
+    "shutdownAction": "none",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-azuretools.vscode-docker",
+                "github.copilot",
+                "anthropic.claude-code"
+            ],
+            "settings": {
+                "terminal.integrated.defaultProfile.linux": "zsh"
+            }
+        }
+    }
+}

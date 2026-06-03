@@ -1,0 +1,14 @@
+# ビルドコンテキストから除外
+workspace/
+.git/
+.gitignore
+.gitattributes
+*.md
+.env
+.env.local
+.devcontainer/
+secrets/
+developments-container
+
+# COPY する公開鍵だけ取り戻す
+!developments-container.pub

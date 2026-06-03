@@ -4,12 +4,15 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: dev-environment
-    restart: always
+    hostname: dev-env
+    restart: unless-stopped
+    init: true
+    env_file: .env
 
-    # Docker ソケットアクセス用（entrypoint.sh で動的に GID を解決するためフォールバック）
-    # rootful Docker: `getent group docker | cut -d: -f3` で確認して設定
-    group_add:
-      - ${DOCKER_GID:-999}
+    # rootless Docker では user namespace のマッピングにより socket への書き込みが通るため
+    # group_add は不要。rootful Docker で運用する場合は以下を有効化する。
+    # group_add:
+    #   - ${DOCKER_GID:-999}
 
     networks:
       - dev-network
@@ -17,31 +20,56 @@ services:
       - "2222:22"   # SSH
 
     volumes:
-      # DooD: ホストの Docker ソケットを共有（.env で DOCKER_SOCK を設定）
+      # DooD: ホストの Docker ソケット
       - ${DOCKER_SOCK:-/var/run/docker.sock}:/var/run/docker.sock
-      # ワークスペース
+
+      # ワークスペース (コード)
       - ./workspace:/home/dev/workspace
-      # ホームディレクトリ永続化
-      - dev-home:/home/dev
-      # SSH ホストキー永続化
-      - sshd-keys:/etc/ssh
+
+      # 認証情報 (bind mount) — 誤って named volume を消しても再ログイン不要にするため
+      - ./secrets/aws:/home/dev/.aws
+      - ./secrets/azure:/home/dev/.azure
+      - ./secrets/gh:/home/dev/.config/gh
+      - ./secrets/claude:/home/dev/.claude
+      - ./secrets/codex:/home/dev/.codex
+      - ./secrets/copilot:/home/dev/.copilot
+      - ./secrets/databricks:/home/dev/.databricks
+
+      # キャッシュ系 (named volume) — 消えても DL し直せる
+      - dev-nvm:/home/dev/.nvm
+      - dev-npm:/home/dev/.npm
+      - dev-cache:/home/dev/.cache
+      - dev-local-share:/home/dev/.local/share
+
+      # SSH (authorized_keys 等)
+      - dev-ssh:/home/dev/.ssh
+
+      # sshd のホスト鍵だけ永続化 (sshd_config 本体は Dockerfile 管理)
+      - sshd-host-keys:/etc/ssh/host_keys
 
     environment:
-      SHELL: /bin/zsh
       DOCKER_HOST: unix:///var/run/docker.sock
 
     healthcheck:
       test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/22"]
-      interval: 30s
+      interval: 60s
       timeout: 5s
       retries: 3
       start_period: 30s
 
 
 volumes:
-  dev-home:
+  dev-nvm:
     driver: local
-  sshd-keys:
+  dev-npm:
+    driver: local
+  dev-cache:
+    driver: local
+  dev-local-share:
+    driver: local
+  dev-ssh:
+    driver: local
+  sshd-host-keys:
     driver: local
 
 networks:
