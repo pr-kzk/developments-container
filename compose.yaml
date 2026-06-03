@@ -60,7 +60,6 @@ services:
     container_name: dev-environment
     restart: unless-stopped
     init: true
-    env_file: .env
 
     network_mode: "service:dind"
 
