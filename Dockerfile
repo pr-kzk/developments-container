@@ -152,12 +152,10 @@ EOF
 RUN usermod -l dev -d /home/dev -m ubuntu && \
     groupmod -n dev ubuntu && \
     usermod -s /bin/zsh dev && \
-    echo "dev ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers && \
-    mkdir -p /home/dev/.ssh && \
-    chown dev:dev /home/dev/.ssh && chmod 700 /home/dev/.ssh
+    echo "dev ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
-# SSH 公開鍵
-COPY --chown=dev:dev --chmod=600 developments-container.pub /home/dev/.ssh/authorized_keys
+# 注: authorized_keys は entrypoint.sh が ./secrets/ssh-key/ の公開鍵から毎回展開する
+# (鍵自体も初回 up 時に entrypoint が ed25519 で生成する)
 
 # ------------------------------------------------------------------ #
 # 8. dev ユーザー固有ツール (nvm/node, pnpm, uv, oh-my-zsh, Claude/Codex/Copilot/AzFunc)
@@ -170,8 +168,11 @@ ENV SHELL=/bin/zsh \
 
 RUN touch "${BASH_ENV}"
 
-# nvm + Node.js (latest)
-RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | \
+# nvm + Node.js (どちらもビルド時点の最新)
+# nvm のバージョンは releases/latest のリダイレクト先からタグを動的に解決する
+RUN NVM_VERSION="$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/nvm-sh/nvm/releases/latest | sed 's|.*/tag/||')" && \
+    echo "Installing nvm ${NVM_VERSION}" && \
+    curl -fsSL "https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_VERSION}/install.sh" | \
         PROFILE="${BASH_ENV}" bash && \
     bash -c 'source "${BASH_ENV}" && nvm install node'
 
@@ -194,14 +195,35 @@ RUN curl -fsSL https://claude.ai/install.sh | bash
 COPY --chown=dev:dev .tmux.conf /home/dev/.tmux.conf
 COPY --chown=dev:dev .zshrc.custom /home/dev/.zshrc.custom
 
-# .zshrc に bash_env と custom 設定をソース
+# .zshrc に bash_env と custom 設定をソース (対話シェル用)
 RUN echo '. "/home/dev/.bash_env"' >> /home/dev/.zshrc && \
     echo '. "/home/dev/.zshrc.custom"' >> /home/dev/.zshrc
 
+# 非対話 zsh (ssh host 'cmd') でも DOCKER_HOST と PATH が効くように .zshenv で
+# /etc/profile.d/dev-env.sh と .bash_env を必ず source する。
+# /etc/profile.d/dev-env.sh の中身は root ステージで配置する (後段)。
+RUN cat > /home/dev/.zshenv <<'EOF'
+[ -r /etc/profile.d/dev-env.sh ] && . /etc/profile.d/dev-env.sh
+[ -r /home/dev/.bash_env ]       && . /home/dev/.bash_env
+EOF
+
 # ------------------------------------------------------------------ #
-# 9. エントリポイント
+# 9. エントリポイント + 全シェル共通 env
 # ------------------------------------------------------------------ #
 USER root
+
+# DinD への接続情報と dev ユーザ PATH を /etc/profile.d 経由で配る。
+# - 対話 login shell: /etc/profile が読む
+# - 非対話 zsh: 上で作った ~/.zshenv が読む
+COPY <<'EOF' /etc/profile.d/dev-env.sh
+# dev-env コンテナ共通環境変数 (Dockerfile 管理)
+export DOCKER_HOST=tcp://localhost:2376
+export DOCKER_TLS_VERIFY=1
+export DOCKER_CERT_PATH=/certs/client
+export DATABRICKS_CONFIG_FILE=/home/dev/.databricks/config
+export PATH="/home/dev/.local/bin:/home/dev/.nvm/bin:${PATH}"
+EOF
+RUN chmod 0644 /etc/profile.d/dev-env.sh
 
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh

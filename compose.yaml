@@ -1,32 +1,82 @@
 services:
+  # ------------------------------------------------------------------ #
+  # DinD (Docker-in-Docker)
+  # ホスト docker.sock を一切共有しないため、dev-env の中で立てる docker は
+  # ここで完結する。dev-env と network namespace を共有することで、
+  # 既存の SSH 2222 や inner container の port publish を host に出せる。
+  #
+  # 注: rootless 版 (docker:NN-dind-rootless) は rootless docker ホストの
+  # 中だと user namespace を二重に切れず newuidmap が失敗する。
+  # 非-rootless 版を使うが、ホストがすでに rootless docker なので
+  # 中の dockerd が「コンテナ root」でも実体は host の通常ユーザに留まる。
+  # ------------------------------------------------------------------ #
+  dind:
+    image: docker:29-dind
+    container_name: dev-environment-dind
+    hostname: dev-env
+    restart: unless-stopped
+    privileged: true   # DinD は privileged 必須 (rootless ホスト内なので実害なし)
+    init: true
+
+    environment:
+      DOCKER_TLS_CERTDIR: /certs   # /certs/server, /certs/client を自動生成
+
+    networks:
+      - dev-network
+
+    ports:
+      - "2222:22"     # SSH (sshd は dev-env 側、netns 共有で同居)
+      # 開発用に外に出したいポートは必要に応じてここに追加
+      # - "3000:3000"
+      # - "5173:5173"
+      # - "8000:8000"
+      # - "8080:8080"
+
+    volumes:
+      - dind-certs:/certs
+      - dind-data:/var/lib/docker
+      # workspace を dind 側にも同じパスでマウントしておくと、
+      # dev-env から `docker run -v $(pwd):/app` 形式の bind mount が機能する
+      - ./workspace:/home/dev/workspace
+
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 2376"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+
+  # ------------------------------------------------------------------ #
+  # dev-env (作業用コンテナ)
+  # network_mode: service:dind で dind の netns を共有。
+  # → dev-env からは localhost:2376 で dind の dockerd に届く
+  # → inner container が listen するポートは dind の ports で host に出せる
+  # ------------------------------------------------------------------ #
   dev-env:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: dev-environment
-    hostname: dev-env
     restart: unless-stopped
     init: true
     env_file: .env
 
-    # rootless Docker では user namespace のマッピングにより socket への書き込みが通るため
-    # group_add は不要。rootful Docker で運用する場合は以下を有効化する。
-    # group_add:
-    #   - ${DOCKER_GID:-999}
+    network_mode: "service:dind"
 
-    networks:
-      - dev-network
-    ports:
-      - "2222:22"   # SSH
+    depends_on:
+      dind:
+        condition: service_healthy
 
     volumes:
-      # DooD: ホストの Docker ソケット
-      - ${DOCKER_SOCK:-/var/run/docker.sock}:/var/run/docker.sock
-
-      # ワークスペース (コード)
+      # ワークスペース (コード) — dind 側と同じパスで揃える
       - ./workspace:/home/dev/workspace
 
-      # 認証情報 (bind mount) — 誤って named volume を消しても再ログイン不要にするため
+      # DinD クライアント証明書 (read-only)
+      - dind-certs:/certs:ro
+
+      # 認証情報 (bind mount, ディレクトリのみ — 単独ファイル mount は使わない)
+      # 誤って named volume を消しても再ログイン不要にするため
       - ./secrets/aws:/home/dev/.aws
       - ./secrets/azure:/home/dev/.azure
       - ./secrets/gh:/home/dev/.config/gh
@@ -34,8 +84,10 @@ services:
       - ./secrets/codex:/home/dev/.codex
       - ./secrets/copilot:/home/dev/.copilot
       - ./secrets/databricks:/home/dev/.databricks
-      - ./secrets/gitconfig:/home/dev/.gitconfig
-      - ./secrets/databrickscfg:/home/dev/.databrickscfg
+      # git の global config は XDG パス (~/.config/git/config) に置く
+      - ./secrets/git:/home/dev/.config/git
+      # SSH 鍵 (初回 up で entrypoint が ed25519 を生成、以後は再利用)
+      - ./secrets/ssh-key:/home/dev/.ssh-key
 
       # キャッシュ系 (named volume) — 消えても DL し直せる
       - dev-nvm:/home/dev/.nvm
@@ -50,7 +102,12 @@ services:
       - sshd-host-keys:/etc/ssh/host_keys
 
     environment:
-      DOCKER_HOST: unix:///var/run/docker.sock
+      # dind の dockerd に TLS で接続 (netns 共有なので localhost で届く)
+      DOCKER_HOST: tcp://localhost:2376
+      DOCKER_TLS_VERIFY: "1"
+      DOCKER_CERT_PATH: /certs/client
+      # databricks CLI v2 は ~/.databrickscfg ではなくこのパスを参照する
+      DATABRICKS_CONFIG_FILE: /home/dev/.databricks/config
 
     healthcheck:
       test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/22"]
@@ -61,6 +118,13 @@ services:
 
 
 volumes:
+  # DinD
+  dind-certs:
+    driver: local
+  dind-data:
+    driver: local
+
+  # dev-env
   dev-nvm:
     driver: local
   dev-npm:
