@@ -34,6 +34,8 @@ services:
       - ./secrets/codex:/home/dev/.codex
       - ./secrets/copilot:/home/dev/.copilot
       - ./secrets/databricks:/home/dev/.databricks
+      - ./secrets/gitconfig:/home/dev/.gitconfig
+      - ./secrets/databrickscfg:/home/dev/.databrickscfg
 
       # キャッシュ系 (named volume) — 消えても DL し直せる
       - dev-nvm:/home/dev/.nvm

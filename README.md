@@ -14,6 +14,8 @@
 │   └── devcontainer.json      # VS Code Dev Containers 用
 ├── secrets/                   # 認証情報の bind mount 先 (.gitignore)
 │   ├── aws/   azure/   gh/   claude/   codex/   copilot/   databricks/
+│   ├── gitconfig              # ~/.gitconfig (file mount)
+│   └── databrickscfg          # ~/.databrickscfg (file mount)
 ├── workspace/                 # コード共有 (bind mount, .gitignore)
 ├── .tmux.conf  .zshrc.custom  # dotfiles
 └── developments-container.pub # SSH 公開鍵 (秘密鍵はリポ外)
@@ -59,21 +61,23 @@ ssh -p 2222 -i developments-container dev@localhost
 ```sh
 docker compose down  # 既存コンテナを停止
 
-# 旧ボリュームから新 bind mount に救出
+# 旧ボリュームから新 bind mount に救出 (ディレクトリは ./secrets/<name> へ、ドット剥がす)
 docker run --rm \
     -v development-env_dev-home:/old:ro \
     -v "$PWD/secrets":/new \
     alpine sh -c '
         for d in .aws .azure .config/gh .claude .codex .copilot .databricks; do
             src=/old/$d
-            name=$(basename $d)
-            if [ -d "$src" ]; then
-                cp -a "$src/." "/new/$name/"
-            fi
+            name=$(basename $d); name=${name#.}
+            [ -d "$src" ] && cp -a "$src/." "/new/$name/" && echo "ok: $d -> /new/$name/"
         done
+        # 単独ファイル系
+        [ -f /old/.gitconfig ]     && cp -a /old/.gitconfig     /new/gitconfig     && echo "ok: .gitconfig"
+        [ -f /old/.databrickscfg ] && cp -a /old/.databrickscfg /new/databrickscfg && echo "ok: .databrickscfg"
     '
 
 # sshd のホスト鍵も旧 sshd-keys volume から拾っておくと SSH の警告が出ない
+docker volume create development-env_sshd-host-keys >/dev/null
 docker run --rm \
     -v development-env_sshd-keys:/old:ro \
     -v development-env_sshd-host-keys:/new \
