@@ -66,6 +66,9 @@ services:
     depends_on:
       dind:
         condition: service_healthy
+        # dind が再起動すると netns が変わる。restart: true で dev-env も
+        # 追従再生成させ、旧 netns (lo のみ) に取り残されるのを防ぐ。
+        restart: true
 
     volumes:
       # ワークスペース (コード) — dind 側と同じパスで揃える
