@@ -88,8 +88,13 @@ services:
       - ./secrets/codex:/home/dev/.codex
       - ./secrets/copilot:/home/dev/.copilot
       - ./secrets/databricks:/home/dev/.databricks
-      # git の global config は XDG パス (~/.config/git/config) に置く
-      - ./secrets/git:/home/dev/.config/git
+      # git の global config はホストと共有する (XDG パス ~/.config/git/config)。
+      # ホスト側は ~/.gitconfig をこの実体への symlink にしてあるので、
+      # どちらで編集しても同じ 1 ファイルを見る。
+      # 注: read-only 必須。書き込み可にすると entrypoint の chown でホスト側の
+      # 所有者が subuid (100999) に書き換わり、ホストから編集できなくなる。
+      # 代わりにコンテナ内で `git config --global` は使えない (ホストで編集する)。
+      - ${HOME}/.config/git:/home/dev/.config/git:ro
       # SSH 鍵 (初回 up で entrypoint が ed25519 を生成、以後は再利用)
       - ./secrets/ssh-key:/home/dev/.ssh-key
 

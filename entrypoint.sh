@@ -11,6 +11,9 @@ set -e
 # には sudo が必要になる。
 #
 # トップの所有者が既に dev なら何もしない (2 回目以降のコストを避ける)
+#
+# 注: /home/dev/.config/git は対象に含めない。ホストの ~/.config/git を read-only で
+# マウントしており、chown すると失敗して起動できなくなる (かつ本来 chown してはいけない)。
 # ------------------------------------------------------------------ #
 DEV_UID=$(id -u dev)
 
@@ -22,7 +25,6 @@ for d in \
     /home/dev/.copilot \
     /home/dev/.databricks \
     /home/dev/.config/gh \
-    /home/dev/.config/git \
     /home/dev/.cache \
     /home/dev/.local/share \
     /home/dev/.npm \

@@ -8,7 +8,6 @@ workspace/
 .env.local
 .devcontainer/
 secrets/
-dev-container
-
-# COPY する公開鍵だけ取り戻す
-!dev-container.pub
+# 旧構成の repo-root 鍵。現在は公開鍵もビルドコンテキストに入れない
+# (authorized_keys は entrypoint.sh が実行時に ./secrets/ssh-key/ から展開する)
+dev-container*
