@@ -20,6 +20,7 @@ services:
 
     environment:
       DOCKER_TLS_CERTDIR: /certs   # /certs/server, /certs/client を自動生成
+      TZ: Asia/Tokyo               # dockerd のログ時刻をホストに揃える
 
     networks:
       - dev-network
@@ -35,6 +36,9 @@ services:
     volumes:
       - dind-certs:/certs
       - dind-data:/var/lib/docker
+      # docker:dind (alpine) には tzdata が入っておらず TZ だけでは解決できないため、
+      # ホストの zoneinfo を実体ごと持ち込む
+      - /etc/localtime:/etc/localtime:ro
       # workspace を dind 側にも同じパスでマウントしておくと、
       # dev-env から `docker run -v $(pwd):/app` 形式の bind mount が機能する
       - ./workspace:/home/dev/workspace
@@ -111,6 +115,8 @@ services:
       - sshd-host-keys:/etc/ssh/host_keys
 
     environment:
+      # Dockerfile でも ENV/localtime を設定済みだが、ここで上書きできるようにしておく
+      TZ: Asia/Tokyo
       # dind の dockerd に TLS で接続 (netns 共有なので localhost で届く)
       DOCKER_HOST: tcp://localhost:2376
       DOCKER_TLS_VERIFY: "1"

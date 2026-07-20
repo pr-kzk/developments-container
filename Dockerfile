@@ -5,6 +5,9 @@ FROM ubuntu:26.04
 # 1. 基本 + 開発ツール (apt)
 # ------------------------------------------------------------------ #
 ENV DEBIAN_FRONTEND=noninteractive
+# コンテナのデフォルトは UTC のため、明示しないとホスト (JST) と 9 時間ずれて見える。
+# tzdata インストール前に置くことで postinst が対話せずこの TZ を採用する。
+ENV TZ=Asia/Tokyo
 
 # 基本ツール + 開発ツール + Playwright/Chromium 用 libs + 日本語/絵文字フォント
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -28,6 +31,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ripgrep \
         poppler-utils \
         lsb-release \
+        tzdata \
         # Playwright/Chromium 実行に必要な system libs
         libasound2t64 \
         libatk-bridge2.0-0t64 \
@@ -64,6 +68,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         fonts-freefont-ttf \
         xfonts-cyrillic \
         xfonts-scalable \
+    && ln -snf /usr/share/zoneinfo/$TZ /etc/localtime \
+    && echo $TZ > /etc/timezone \
     && rm -rf /var/lib/apt/lists/*
 
 # ------------------------------------------------------------------ #
