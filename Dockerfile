@@ -148,6 +148,11 @@ EOF
 
 # ------------------------------------------------------------------ #
 # 7. dev ユーザー作成 (base image の ubuntu ユーザーを rename)
+#
+# uid/gid は 1000 のまま。ホストが rootless docker なので、コンテナ内 uid 1000 は
+# ホストの subuid (100999) にマップされる。bind mount したホスト側ディレクトリは
+# 初期状態ではホストユーザー (= コンテナ内 root) 所有で dev から書けないため、
+# entrypoint.sh が起動時に dev へ chown して追従させる。
 # ------------------------------------------------------------------ #
 RUN usermod -l dev -d /home/dev -m ubuntu && \
     groupmod -n dev ubuntu && \

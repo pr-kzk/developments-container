@@ -2,6 +2,40 @@
 set -e
 
 # ------------------------------------------------------------------ #
+# マウント済みディレクトリの所有者を dev に揃える
+#
+# ホストは rootless docker なので、ホスト側で作った bind mount 元 (./secrets/*,
+# ./workspace) はコンテナ内では root:root に見え、dev から書き込めない。
+# named volume も初回は root 所有で作られる。ここで dev に chown して解消する。
+# ホスト側では uid 100999 (kz の subuid) 所有になるため、ホストから直接編集する
+# には sudo が必要になる。
+#
+# トップの所有者が既に dev なら何もしない (2 回目以降のコストを避ける)
+# ------------------------------------------------------------------ #
+DEV_UID=$(id -u dev)
+
+for d in \
+    /home/dev/.aws \
+    /home/dev/.azure \
+    /home/dev/.claude \
+    /home/dev/.codex \
+    /home/dev/.copilot \
+    /home/dev/.databricks \
+    /home/dev/.config/gh \
+    /home/dev/.config/git \
+    /home/dev/.cache \
+    /home/dev/.local/share \
+    /home/dev/.npm \
+    /home/dev/.nvm \
+    /home/dev/workspace \
+; do
+    if [ -d "$d" ] && [ "$(stat -c %u "$d")" != "$DEV_UID" ]; then
+        echo "Fixing ownership of $d"
+        chown -R dev:dev "$d"
+    fi
+done
+
+# ------------------------------------------------------------------ #
 # sshd ホスト鍵を永続ボリュームに生成 (初回のみ)
 # ------------------------------------------------------------------ #
 HOST_KEYS_DIR=/etc/ssh/host_keys
