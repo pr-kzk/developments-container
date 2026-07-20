@@ -178,6 +178,37 @@ nvm は `releases/latest` を動的解決してビルドしているので `--no
 
 **`./secrets` は絶対に git add しない** (`.gitignore` 済みだが念のため確認)。
 
+## UID マッピング (rootless docker)
+
+ホストが rootless docker なので、UID はそのまま素通しにならず user namespace でずれる。
+
+| ホスト | コンテナ内 |
+|---|---|
+| `kz` (1000) | `root` (0) |
+| 100999 (kz の subuid) | `dev` (1000) |
+
+**ホスト uid 1000 がコンテナ内 uid 0 にマップされる 1 点だけが固定**で、それ以外は subuid 領域 (100000+) に飛ぶ。つまりホストとコンテナで所有権が一致する UID は 0 しか存在しない。
+
+この結果、ホスト側で作った `./secrets/*` や `./workspace` はコンテナ内では `root:root 755` に見え、`dev` (uid 1000) から書き込めない。`entrypoint.sh` が起動時にこれらを `dev` へ `chown -R` して解消している (トップの所有者が既に `dev` ならスキップするので 2 回目以降はノーコスト)。
+
+副作用として、**ホスト側では `./secrets/*` と `./workspace` が uid 100999 所有になり、ホストから直接編集するには `sudo` が要る**。編集は基本コンテナ内 (SSH / VS Code Remote) から行う前提。
+
+`./secrets/ssh-key` だけは chown 対象外にしてある。ホストから秘密鍵を読めないと SSH でコンテナに入れなくなるため、ホストユーザー所有のまま残す必要がある。
+
+なお rootless では回避策が使えないことを確認済み:
+
+- `--mount type=bind,...,idmap` (id-mapped mount) → `invalid mode: idmap` で非対応
+- `/etc/subuid` の細工 → ホスト全体の rootless コンテナに影響し順序依存で壊れやすい
+- 共有グループ方式 → ホスト側の umask が 022 だとホストで新規作成したファイルがコンテナから書けず破綻
+
+ホストが **rootful** docker なら UID が素通しになり (ホスト 1000 = コンテナ 1000)、この chown は不要になる。環境を判定するには:
+
+```bash
+docker info -f '{{.SecurityOptions}}'   # name=rootless があれば rootless
+mkdir -p /tmp/uidtest && docker run --rm -v /tmp/uidtest:/t alpine stat -c '%u:%g' /t
+# → 0:0 なら rootless、1000:1000 なら rootful
+```
+
 ## トラブルシュート
 
 - **VS Code が rootful docker を探しに行く**: ホストで `echo $DOCKER_HOST` を確認。空なら `.bashrc/.zshrc` に export 追加。
@@ -185,5 +216,6 @@ nvm は `releases/latest` を動的解決してビルドしているので `--no
 - **`Permission denied (publickey)` で SSH できない**: `secrets/ssh-key/dev-container` が無ければ起動失敗。`docker compose logs dev-env` で `Generated new SSH keypair` ログを確認。あるのに失敗するなら、鍵の owner/mode を確認 (private は 600、ホストの自分が読める owner)。
 - **dev-env 内で `docker info` が `Cannot connect to the Docker daemon`**: dind がまだ起動中 (TLS 証明書生成や ipv6 が遅い等)。`docker compose logs dind` で `API listen on [::]:2376` が出るまで待つ。30 秒経っても出なければ healthcheck (`docker compose ps`) を確認。
 - **inner container のポートにホストから繋がらない**: `compose.yaml` の `dind.ports` にそのポートを追加して `docker compose up -d` で反映。`network_mode: service:dind` の都合で dev-env 側に `ports:` を書いても無視される。
-- **`./secrets/*` が root 所有で書けない**: rootless docker で初回作成すると UID 1000 になるはずだが、もし違ったら `sudo chown -R $(id -u):$(id -g) secrets/`。
+- **コンテナ内で `~/.claude` や `~/.aws` が空・書き込めない**: bind mount 元の所有者がコンテナ内で `root` に見えている。`entrypoint.sh` の chown が効いていないので `docker compose logs dev-env` で `Fixing ownership of ...` が出ているか確認。詳細は [UID マッピング](#uid-マッピング-rootless-docker) 参照。ホスト側で `sudo chown -R $(id -u):$(id -g) secrets/` を実行すると**この問題が再発する**ので注意 (コンテナから書けなくなる)。
+- **ホストから `./secrets/*` や `./workspace` を編集できない**: 仕様。uid 100999 所有になっているため `sudo` が必要。通常はコンテナ内から編集する。
 - **dind のイメージ/ボリュームを綺麗にしたい**: `docker compose down && docker volume rm development-env_dind-data` で `/var/lib/docker` ごと消える。次回起動で空から始まる。
