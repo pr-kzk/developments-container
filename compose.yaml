@@ -40,7 +40,9 @@ services:
       - ./workspace:/home/dev/workspace
 
     healthcheck:
-      test: ["CMD-SHELL", "nc -z 127.0.0.1 2376"]
+      # TCP を叩くだけだと TLS ハンドシェイク未完了で dockerd がエラーログを吐くため、
+      # ローカルの UNIX ソケット経由で正規リクエストを投げる
+      test: ["CMD-SHELL", "docker -H unix:///var/run/docker.sock info > /dev/null"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -112,7 +114,8 @@ services:
       DATABRICKS_CONFIG_FILE: /home/dev/.databricks/config
 
     healthcheck:
-      test: ["CMD", "bash", "-c", "echo > /dev/tcp/localhost/22"]
+      # ポートを叩くと sshd がバナー交換エラーを記録するため、プロセス存在で判定する
+      test: ["CMD", "pgrep", "-x", "sshd"]
       interval: 60s
       timeout: 5s
       retries: 3
