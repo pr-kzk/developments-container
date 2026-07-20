@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM ubuntu:24.04
+FROM ubuntu:26.04
 
 # ------------------------------------------------------------------ #
 # 1. 基本 + 開発ツール (apt)
@@ -97,7 +97,16 @@ RUN wget -qO- https://apt.releases.hashicorp.com/gpg | \
 # ------------------------------------------------------------------ #
 # 4. Cloud CLI 群 (Azure CLI / Azure Functions Core Tools / Databricks / AWS v2)
 # ------------------------------------------------------------------ #
-RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash && \
+# 注:
+#  - azure-cli の apt repo は resolute (26.04) 未提供。未指定だとインストーラが jammy に
+#    フォールバックするため、利用可能な最新の noble を DIST_CODE で明示する。
+#    (resolute 版が公開されたらこの pin は外す)
+#  - インストーラは一度ファイルに落としてから実行する。`curl -sL | bash` だと取得失敗時に
+#    空入力を受けた bash が黙って exit 0 し、az 未インストールのままビルドが通ってしまう。
+RUN curl -fsSL https://aka.ms/InstallAzureCLIDeb -o /tmp/install-az.sh && \
+    DIST_CODE=noble bash /tmp/install-az.sh && \
+    rm /tmp/install-az.sh && \
+    az version && \
     curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh && \
     cd /tmp && \
     curl -fsSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip" && \
@@ -106,12 +115,17 @@ RUN curl -sL https://aka.ms/InstallAzureCLIDeb | bash && \
     rm -rf /tmp/awscliv2.zip /tmp/aws
 
 # Azure Functions Core Tools (Microsoft packages.microsoft.com の apt 経由 / npm 版は node 26 で post-install が壊れる)
+# 注:
+#  - microsoft-prod repo は resolute (26.04) 版が存在するが azure-functions-core-tools-4 を含まないので noble 固定
+#  - 署名鍵は 2025 年に更新されており、古い repo (noble) と新しい repo の両方を検証できるよう 2 鍵を同居させる
 RUN curl -fsSL https://packages.microsoft.com/keys/microsoft.asc -o /tmp/microsoft.asc && \
-    gpg --batch --yes --dearmor -o /etc/apt/keyrings/microsoft.gpg /tmp/microsoft.asc && \
-    rm /tmp/microsoft.asc && \
+    curl -fsSL https://packages.microsoft.com/keys/microsoft-2025.asc -o /tmp/microsoft-2025.asc && \
+    cat /tmp/microsoft.asc /tmp/microsoft-2025.asc | \
+        gpg --batch --yes --dearmor -o /etc/apt/keyrings/microsoft.gpg && \
+    rm /tmp/microsoft.asc /tmp/microsoft-2025.asc && \
     chmod a+r /etc/apt/keyrings/microsoft.gpg && \
     echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/microsoft.gpg] \
-        https://packages.microsoft.com/repos/microsoft-ubuntu-$(lsb_release -cs)-prod $(lsb_release -cs) main" | \
+        https://packages.microsoft.com/repos/microsoft-ubuntu-noble-prod noble main" | \
         tee /etc/apt/sources.list.d/microsoft-prod.list && \
     apt-get update && apt-get install -y --no-install-recommends azure-functions-core-tools-4 && \
     rm -rf /var/lib/apt/lists/*
