@@ -1,5 +1,5 @@
 workspace/
 secrets/
 # 旧構成の repo-root 鍵が残っていても誤って add されないように残す
-developments-container*
+dev-container*
 .env.local

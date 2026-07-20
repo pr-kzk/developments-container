@@ -8,7 +8,7 @@ workspace/
 .env.local
 .devcontainer/
 secrets/
-developments-container
+dev-container
 
 # COPY する公開鍵だけ取り戻す
-!developments-container.pub
+!dev-container.pub

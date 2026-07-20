@@ -21,14 +21,14 @@ SSH_KEY_DIR=/home/dev/.ssh-key
 mkdir -p "$SSH_KEY_DIR"
 chmod 700 "$SSH_KEY_DIR"
 
-PRIV_KEY="$SSH_KEY_DIR/developments-container"
-PUB_KEY="$SSH_KEY_DIR/developments-container.pub"
+PRIV_KEY="$SSH_KEY_DIR/dev-container"
+PUB_KEY="$SSH_KEY_DIR/dev-container.pub"
 
 if [ ! -f "$PRIV_KEY" ]; then
     ssh-keygen -q -N '' -t ed25519 -f "$PRIV_KEY" -C "dev-env"
     chmod 600 "$PRIV_KEY"
     chmod 644 "$PUB_KEY"
-    echo "Generated new SSH keypair at ./secrets/ssh-key/developments-container{,.pub}"
+    echo "Generated new SSH keypair at ./secrets/ssh-key/dev-container{,.pub}"
 fi
 
 mkdir -p /home/dev/.ssh
